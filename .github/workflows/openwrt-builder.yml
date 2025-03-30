@@ -29,7 +29,7 @@ on:
         default: 'openwrt-24.10'
       enable_ssh:
         description: '启用SSH调试'
-        required: false
+        required: true
         type: boolean
         default: false
 
