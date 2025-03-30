@@ -58,8 +58,12 @@ jobs:
         run: |
           sudo bash -c 'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)'
           sudo timedatectl set-timezone "$TZ"
-          sudo mkdir -p /workdir
-          sudo chown $USER:$GROUPS /workdir
+          # 在 /mnt 下创建工作目录，利用 /dev/sdb1 的充足空间
+          sudo mkdir -p /mnt/workdir
+          sudo chown $USER:$GROUPS /mnt/workdir
+          # 删除原有的 /workdir 并创建符号链接，使之指向 /mnt/workdir
+          sudo rm -rf /workdir
+          sudo ln -s /mnt/workdir /workdir
 
       - name: Clone source code
         working-directory: /workdir
