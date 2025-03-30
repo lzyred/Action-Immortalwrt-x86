@@ -28,9 +28,9 @@ on:
         required: false
         default: 'openwrt-24.10'
       enable_ssh:
-        description: '启用SSH调试'
-        required: true
+        description: 'Enable SSH debugging?'
         type: boolean
+        required: true
         default: false
 
 jobs:
@@ -95,7 +95,9 @@ jobs:
           $GITHUB_WORKSPACE/$DIY_P2_SH
 
       - name: Start SSH Session (Debug)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.enable_ssh == true
+        if: |
+         github.event_name == 'workflow_dispatch' &&
+         github.event.inputs.enable_ssh == 'true'
         uses: mxschmitt/action-tmate@v3    
 
       - name: Download package
