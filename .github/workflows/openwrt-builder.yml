@@ -122,7 +122,7 @@ jobs:
 
       - name: Organize files
         id: organize
-         env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+        if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
         run: |
           cd openwrt/bin/targets/*/*
           rm -rf packages
