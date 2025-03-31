@@ -1,14 +1,3 @@
-#
-# https://github.com/P3TERX/Actions-OpenWrt
-#
-# File: .github/workflows/openwrt-bulder.yml
-# Description: Build OpenWrt using GitHub Actions
-#
-# Copyright (c) 2019-2024 P3TERX
-# This is free software, licensed under the MIT License.
-# See /LICENSE for more information.
-#
-
 name: OpenWrt Builder
 
 on:
@@ -133,19 +122,24 @@ jobs:
 
       - name: Organize files
         id: organize
-        if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+         env.UPLOAD_FIRMWARE == 'true' && !cancelled()
         run: |
           cd openwrt/bin/targets/*/*
           rm -rf packages
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
 
+      - name: Compress firmware files
+        run: |
+          cd ${{ env.FIRMWARE }}
+          tar -czf firmware.tar.gz *
+
       - name: Upload firmware directory
         uses: actions/upload-artifact@main
         if: steps.organize.outputs.status == 'success' && !cancelled()
         with:
           name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-          path: ${{ env.FIRMWARE }}
+          path: ${{ env.FIRMWARE }}/firmware.tar.gz
 
       - name: Generate release tag
         id: tag
@@ -153,7 +147,7 @@ jobs:
         run: |
           echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
           touch release.txt
-          [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" >> release.txt
+          [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 GoFile" >> release.txt
           echo "status=success" >> $GITHUB_OUTPUT
 
       - name: Upload firmware to release
@@ -164,7 +158,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
-          files: ${{ env.FIRMWARE }}/*
+          files: ${{ env.FIRMWARE }}/firmware.tar.gz
 
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@main
