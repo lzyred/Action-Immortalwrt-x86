@@ -16,3 +16,9 @@
 # Add a feed source
 # echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
 #echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
+echo "src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main" >> "feeds.conf.default"
+# update & install feeds
+./scripts/feeds update -a
+./scripts/feeds install -a
+# make package
+make package/luci-app-nikki/compile
