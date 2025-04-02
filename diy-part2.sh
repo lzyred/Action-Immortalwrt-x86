@@ -38,15 +38,3 @@ config interface 'lan'
         list dns '10.10.10.1'
         option delegate '0'
 EOF
-
-# 写入 dhcp 配置文件
-cat <<'EOF' > ./files/etc/config/dhcp
-config dhcp 'lan'
-        option interface 'lan'
-        option start '50'
-        option limit '200'
-        option leasetime '12h'
-        option dhcpv4 'server'
-        option ignore '1'
-        option dynamicdhcp '0'
-EOF
