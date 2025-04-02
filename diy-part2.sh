@@ -110,10 +110,6 @@ config zone
         option forward 'ACCEPT'
         option masq '1'
 
-config include 'openclash'
-        option type 'script'
-        option path '/var/etc/openclash.include'
-
 config zone 'vpn'
         option name 'vpn'
         option input 'ACCEPT'
