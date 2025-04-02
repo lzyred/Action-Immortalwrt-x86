@@ -111,15 +111,6 @@ config zone
 	option output 'ACCEPT'
 	option forward 'ACCEPT'
 
-# config include 'nikki'
-# 	option type 'script'
-# 	option path '/etc/nikki/scripts/firewall_include.sh'
-# 	option fw4_compatible '1'
-
-# config include 'openclash'
-# 	option type 'script'
-# 	option path '/var/etc/openclash.include'
-
 config zone 'vpn'
 	option name 'vpn'
 	option input 'ACCEPT'
