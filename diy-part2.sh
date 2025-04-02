@@ -95,7 +95,6 @@ EOF
 
  # 写入 firewall 配置文件
 cat <<'EOF' > ./files/etc/config/firewall
-
 config defaults
 	option input 'REJECT'
 	option output 'ACCEPT'
