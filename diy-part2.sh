@@ -24,17 +24,30 @@ mkdir -p ./files/etc/config
 
 # 写入 network 配置文件
 cat <<'EOF' > ./files/etc/config/network
+config interface 'loopback'
+	option device 'lo'
+	option proto 'static'
+	option ipaddr '127.0.0.1'
+	option netmask '255.0.0.0'
+
+config globals 'globals'
+	option packet_steering '1'
+
 config device
-        option name 'br-lan'
-        option type 'bridge'
-        list ports 'eth0'
+	option name 'br-lan'
+	option type 'bridge'
+	list ports 'eth0'
 
 config interface 'lan'
-        option device 'br-lan'
-        option proto 'static'
-        option ipaddr '10.10.10.66'
-        option netmask '255.255.255.0'
-        option gateway '10.10.10.1'
-        list dns '10.10.10.1'
-        option delegate '0'
+	option device 'br-lan'
+	option proto 'static'
+	option ipaddr '10.10.10.66'
+	option netmask '255.255.255.0'
+	option gateway '10.10.10.1'
+	list dns '10.10.10.1'
+	option delegate '0'
+
+config interface 'vpn0'
+	option proto 'none'
+	option device 'tun0'
 EOF
