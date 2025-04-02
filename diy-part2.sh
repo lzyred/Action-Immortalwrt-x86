@@ -91,4 +91,49 @@ config odhcpd 'odhcpd'
 	option leasefile '/tmp/hosts/odhcpd'
 	option leasetrigger '/usr/sbin/odhcpd-update'
 	option loglevel '4'
- EOF
+EOF
+
+ # 写入 firewall 配置文件
+cat <<'EOF' > ./files/etc/config/firewall
+
+config defaults
+	option input 'REJECT'
+	option output 'ACCEPT'
+	option forward 'REJECT'
+	option flow_offloading '1'
+	option flow_offloading_hw '1'
+	option fullcone '1'
+	option synflood_protect '1'
+
+config zone
+	option name 'lan'
+	list network 'lan'
+	option input 'ACCEPT'
+	option output 'ACCEPT'
+	option forward 'ACCEPT'
+
+# config include 'nikki'
+# 	option type 'script'
+# 	option path '/etc/nikki/scripts/firewall_include.sh'
+# 	option fw4_compatible '1'
+
+# config include 'openclash'
+# 	option type 'script'
+# 	option path '/var/etc/openclash.include'
+
+config zone 'vpn'
+	option name 'vpn'
+	option input 'ACCEPT'
+	option forward 'ACCEPT'
+	option output 'ACCEPT'
+	option masq '1'
+	option network 'vpn0'
+
+config forwarding 'vpntolan'
+	option src 'vpn'
+	option dest 'lan'
+
+config forwarding 'lantovpn'
+	option src 'lan'
+	option dest 'vpn'
+EOF
