@@ -95,35 +95,38 @@ EOF
 
  # 写入 firewall 配置文件
 cat <<'EOF' > ./files/etc/config/firewall
-config defaults
-	option input 'REJECT'
-	option output 'ACCEPT'
-	option forward 'REJECT'
-	option flow_offloading '1'
-	option flow_offloading_hw '1'
-	option fullcone '1'
-	option synflood_protect '1'
-
-config zone
-	option name 'lan'
-	list network 'lan'
-	option input 'ACCEPT'
-	option output 'ACCEPT'
-	option forward 'ACCEPT'
-
-config zone 'vpn'
-	option name 'vpn'
-	option input 'ACCEPT'
-	option forward 'ACCEPT'
-	option output 'ACCEPT'
-	option masq '1'
+config defaults                                                                                                                                                                                                                      
+        option input 'ACCEPT'                                                                                                                                                                                                        
+        option output 'ACCEPT'                                                                                                                                                                                                       
+        option forward 'ACCEPT'                                                                                                                                                                                                      
+        option flow_offloading '1'                                                                                                                                                                                                   
+        option flow_offloading_hw '1'                                                                                                                                                                                                
+                                                                                                                                                                                                                                     
+config zone                                                                                                                                                                                                                          
+        option name 'lan'                                                                                                                                                                                                            
+        list network 'lan'                                                                                                                                                                                                           
+        option input 'ACCEPT'                                                                                                                                                                                                        
+        option output 'ACCEPT'                                                                                                                                                                                                       
+        option forward 'ACCEPT'                                                                                                                                                                                                      
+        option masq '1'                                                                                                                                                                                                                                                                                                                                                                   
+                                                                                                                                                                                                                                     
+config zone 'vpn'                                                                                                                                                                                                                    
+        option name 'vpn'                                                                                                                                                                                                            
+        option input 'ACCEPT'                                                                                                                                                                                                        
+        option forward 'ACCEPT'                                                                                                                                                                                                      
+        option output 'ACCEPT'                                                                                                                                                                                                       
+        option masq '1'
 	option network 'vpn0'
-
-config forwarding 'vpntolan'
-	option src 'vpn'
-	option dest 'lan'
-
-config forwarding 'lantovpn'
-	option src 'lan'
-	option dest 'vpn'
+                                                            
+config forwarding 'vpntowan'     
+        option src 'vpn'                        
+        option dest 'wan' 
+                             
+config forwarding 'vpntolan'                    
+        option src 'vpn'     
+        option dest 'lan'      
+                              
+config forwarding 'lantovpn' 
+        option src 'lan'       
+        option dest 'vpn'
 EOF
