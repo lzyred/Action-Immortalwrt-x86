@@ -37,6 +37,7 @@ config device
 	option name 'br-lan'
 	option type 'bridge'
 	list ports 'eth0'
+        option ipv6 '0'
 
 config interface 'lan'
 	option device 'br-lan'
