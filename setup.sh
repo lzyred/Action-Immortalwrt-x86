@@ -19,6 +19,24 @@ cd immortalwrt || {
     exit 1;
 }
 
+# 永久添加自定义软件源
+echo "正在写入自定义 feed 源..."
+CUSTOM_FEEDS=$(cat <<-EOL
+src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main
+EOL
+)
+
+# 写入 feeds 配置文件
+if [ ! -f feeds.conf ]; then
+    # 如果不存在自定义配置则从默认文件创建
+    cp feeds.conf.default feeds.conf
+fi
+
+echo "$CUSTOM_FEEDS" >> feeds.conf || {
+    echo "写入 feed 源失败！请检查磁盘权限";
+    exit 1;
+}
+
 echo "正在更新 feeds..."
 ./scripts/feeds update -a || {
     echo "Feeds 更新失败！";
