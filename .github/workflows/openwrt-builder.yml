@@ -15,7 +15,7 @@ on:
       repository_branch:
         description: '分支'
         required: false
-        default: 'openwrt-24.10'
+        default: 'master'
       enable_ssh:
         description: 'Enable SSH debugging?'
         type: boolean
@@ -27,8 +27,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      REPO_URL: "https://github.com/${{ github.event.inputs.repository_owner }}/${{ github.event.inputs.repository_name }}"
-      REPO_BRANCH: ${{ github.event.inputs.repository_branch }}
+      # 兼容两种触发方式：手动触发（workflow_dispatch）和自动触发（repository_dispatch）
+      REPO_URL: "https://github.com/${{ github.event.inputs.repository_owner || github.event.client_payload.repository_owner }}/${{ github.event.inputs.repository_name || github.event.client_payload.repository_name }}"
+      REPO_BRANCH: ${{ github.event.inputs.repository_branch || github.event.client_payload.repository_branch }}
       FEEDS_CONF: feeds.conf.default
       CONFIG_FILE: .config
       DIY_P1_SH: diy-part1.sh
@@ -36,11 +37,22 @@ jobs:
       UPLOAD_BIN_DIR: false
       UPLOAD_FIRMWARE: true
       UPLOAD_RELEASE: true
+      OPENWRT_NAME: immortalwrt
+      OPENWRT_NAME1: x86_64
       TZ: Asia/Shanghai
 
     steps:
       - name: Checkout
         uses: actions/checkout@main
+
+      # - name: Manual Space Optimization
+      #   run: |
+      #    sudo apt-get clean
+      #    sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+      #    sudo fallocate -l 1G /swapfile
+      #    sudo chmod 600 /swapfile
+      #    sudo mkswap /swapfile
+      #    sudo swapon /swapfile
 
       - name: Initialization environment
         env:
@@ -48,10 +60,8 @@ jobs:
         run: |
           sudo bash -c 'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)'
           sudo timedatectl set-timezone "$TZ"
-          # 在 /mnt 下创建工作目录，利用 /dev/sdb1 的充足空间
           sudo mkdir -p /mnt/workdir
           sudo chown $USER:$GROUPS /mnt/workdir
-          # 删除原有的 /workdir 并创建符号链接，使之指向 /mnt/workdir
           sudo rm -rf /workdir
           sudo ln -s /mnt/workdir /workdir
 
@@ -85,8 +95,8 @@ jobs:
 
       - name: Start SSH Session (Debug)
         if: |
-         github.event_name == 'workflow_dispatch' &&
-         github.event.inputs.enable_ssh == 'true'
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.enable_ssh == 'true'
         uses: mxschmitt/action-tmate@v3    
 
       - name: Download package
@@ -107,8 +117,9 @@ jobs:
           echo "status=success" >> $GITHUB_OUTPUT
           grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
           [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-          echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
-
+          echo "FILE_DATE=$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+          echo "FILE_DATE1=$(date +"%Y年%m月%d日.%H时%M分")" >> $GITHUB_ENV
+          
       - name: Check space usage
         if: (!cancelled())
         run: df -hT
@@ -125,40 +136,35 @@ jobs:
         if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
         run: |
           cd openwrt/bin/targets/*/*
-          rm -rf packages
+          rm -rf packages *rootfs.tar.gz *rootfs.img.gz *combined.img.gz *.bin *.config *.buildinfo *.json sha256sums *.manifest *.rootfs.img
           echo "FIRMWARE=$PWD" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
-
-      - name: Compress firmware files
-        run: |
-          cd ${{ env.FIRMWARE }}
-          tar -czf firmware.tar.gz *
 
       - name: Upload firmware directory
         uses: actions/upload-artifact@main
         if: steps.organize.outputs.status == 'success' && !cancelled()
         with:
-          name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-          path: ${{ env.FIRMWARE }}/firmware.tar.gz
+          name: ${{ env.FILE_DATE }}_${{ env.OPENWRT_NAME }}_${{ env.OPENWRT_NAME1 }}
+          path: ${{ env.FIRMWARE }}
 
       - name: Generate release tag
         id: tag
         if: env.UPLOAD_RELEASE == 'true' && !cancelled()
         run: |
-          echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
+          echo "release_tag=${{ env.FILE_DATE1 }}" >> $GITHUB_OUTPUT
           touch release.txt
-          [ ${UPLOAD_GOFILE} = true && ${{ steps.gofile.outputs.url }} ] && echo "🔗 GoFile" >> release.txt
+          echo "📥 固件下载" >> release.txt
           echo "status=success" >> $GITHUB_OUTPUT
 
       - name: Upload firmware to release
         uses: softprops/action-gh-release@master
         if: steps.tag.outputs.status == 'success' && !cancelled()
         env:
-          GITHUB_TOKEN: ${{ secrets.ACTION }} #更新为自建repo权限Token“secrets.<Github_Token>”
+          GITHUB_TOKEN: ${{ secrets.ACTION }}
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
-          files: ${{ env.FIRMWARE }}/firmware.tar.gz
+          files: ${{ env.FIRMWARE }}/*
 
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@main
