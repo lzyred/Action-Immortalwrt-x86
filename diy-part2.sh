@@ -40,7 +40,7 @@ config device
         option ipv6 '0'
 
 config interface 'lan'
-	option device 'br-lan'
+	option device 'eth0'
 	option proto 'static'
 	option ipaddr '10.10.10.66'
 	option netmask '255.255.255.0'
@@ -100,8 +100,7 @@ config defaults
         option input 'ACCEPT'                                                                                                                                                                                                        
         option output 'ACCEPT'                                                                                                                                                                                                       
         option forward 'ACCEPT'                                                                                                                                                                                                      
-        option flow_offloading '1'                                                                                                                                                                                                   
-        option flow_offloading_hw '1'                                                                                                                                                                                                
+        option flow_offloading '1'                                                                                                                                                                                                                                                                                                                                                                                   
                                                                                                                                                                                                                                      
 config zone                                                                                                                                                                                                                          
         option name 'lan'                                                                                                                                                                                                            
