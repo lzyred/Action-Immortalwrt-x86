@@ -42,10 +42,10 @@ config device
 config interface 'lan'
 	option device 'eth0'
 	option proto 'static'
-	option ipaddr '10.10.10.66'
+	option ipaddr 192.168.2.1'
 	option netmask '255.255.255.0'
-	option gateway '10.10.10.1'
-	list dns '10.10.10.1'
+	option gateway '192.168.2.1'
+	list dns 192.168.2.1'
 	option delegate '0'
 
 config interface 'vpn0'
