@@ -1,0 +1,132 @@
+name: OpenWrt Automated Builder
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC (08:00 Beijing Time)
+    - cron: '0 0 * * *'
+  workflow_dispatch: {}  # Retain manual trigger capability
+
+env:  # Centralized environment variables
+  REPO_OWNER: immortalwrt
+  REPO_NAME: immortalwrt
+  REPO_BRANCH: openwrt-24.10
+  BUILD_DIR: /workdir/openwrt
+  ARTIFACT_NAME: OpenWrt_Firmware
+  CCACHE_DIR: /workdir/ccache
+  KEEP_RELEASES: 3
+  TIMEZONE: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      # ----------------------------------
+      # Environment Setup
+      # ----------------------------------
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Initialize Build Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo timedatectl set-timezone $TIMEZONE
+          sudo mkdir -p /mnt/workdir
+          sudo chown -R $USER:$GROUPS /mnt/workdir
+          sudo ln -sf /mnt/workdir /workdir
+
+      # ----------------------------------
+      # Source Code Management
+      # ----------------------------------
+      - name: Clone Repository (Shallow)
+        working-directory: /workdir
+        run: |
+          git clone --depth=1 --branch $REPO_BRANCH \
+          https://github.com/$REPO_OWNER/$REPO_NAME.git openwrt || {
+            echo "::error::Failed to clone repository"
+            exit 1
+          }
+
+      # ----------------------------------
+      # Dependency Management
+      # ----------------------------------
+      - name: Restore Build Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            $BUILD_DIR/dl
+            $CCACHE_DIR
+          key: ${{ runner.os }}-${{ hashFiles('src/feeds.conf.default') }}-${{ hashFiles('src/.config') }}
+
+      - name: Setup Feeds
+        working-directory: $BUILD_DIR
+        run: |
+          [ -e ../src/feeds.conf.default ] && cp ../src/feeds.conf.default .
+          ./scripts/feeds update -a || {
+            echo "::error::Feed update failed"
+            exit 1
+          }
+          ./scripts/feeds install -a
+
+      # ----------------------------------
+      # Build Configuration
+      # ----------------------------------
+      - name: Apply Custom Configuration
+        working-directory: $BUILD_DIR
+        run: |
+          [ -e ../src/files ] && cp -r ../src/files .
+          [ -e ../src/.config ] && cp ../src/.config .
+          chmod +x ../src/diy-part2.sh && ../src/diy-part2.sh
+
+      # ----------------------------------
+      # Compilation Process
+      # ----------------------------------
+      - name: Compile Firmware
+        working-directory: $BUILD_DIR
+        run: |
+          make -j$(($(nproc) + 1)) || {
+            echo "::error::Compilation failed"
+            exit 1
+          }
+          echo "BUILD_VERSION=$(date +'v%Y.%-m.%-d')" >> $GITHUB_ENV
+
+      # ----------------------------------
+      # Artifact Management
+      # ----------------------------------
+      - name: Package Artifacts
+        working-directory: $BUILD_DIR/bin/targets
+        run: |
+          find . -name "*.img.gz" -o -name "*.bin" -o -name "sha256sums" | xargs -I{} cp {} ../artifacts/
+          echo "ARTIFACT_PATH=$(realpath ../artifacts)" >> $GITHUB_ENV
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with: 
+          name: ${{ env.ARTIFACT_NAME }}_${{ env.BUILD_VERSION }}
+          path: ${{ env.ARTIFACT_PATH }}
+
+      # ----------------------------------
+      # Release Management
+      # ----------------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: ${{ env.BUILD_VERSION }}
+          files: ${{ env.ARTIFACT_PATH }}/*
+          body: "Automated OpenWrt build - ${{ env.BUILD_VERSION }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean Old Releases
+        if: success()
+        uses: dev-drprasad/delete-older-releases@v2
+        with:
+          keep_latest: ${{ env.KEEP_RELEASES }}
+          delete_tag_pattern: "v*"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
