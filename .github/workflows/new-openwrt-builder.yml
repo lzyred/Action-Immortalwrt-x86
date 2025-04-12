@@ -3,7 +3,7 @@ name: OpenWrt Automated Builder
 on:
   schedule:
     # Run daily at 00:00 UTC (08:00 Beijing Time)
-    - cron: '0 0 * * *'
+    - cron: '0 0 13 * *'
   workflow_dispatch: {}  # Retain manual trigger capability
 
 env:  # Centralized environment variables
