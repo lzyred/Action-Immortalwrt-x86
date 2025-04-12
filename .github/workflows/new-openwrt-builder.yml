@@ -74,16 +74,26 @@ jobs:
       - name: Load Custom Feeds
         working-directory: ${{ env.BUILD_DIR }}
         run: |
-          [ -e $GITHUB_WORKSPACE/$FEEDS_CONF ] && \
-          cp $GITHUB_WORKSPACE/$FEEDS_CONF feeds.conf.default || {
-            echo "::warning::Custom feeds.conf.default not found, using default"
-          }
-          
-          chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH && \
-          $GITHUB_WORKSPACE/$DIY_P1_SH || {
-            echo "::error::Failed to execute diy-part1.sh"
+          # Handle feeds.conf.default
+          if [ -e "$GITHUB_WORKSPACE/$FEEDS_CONF" ]; then
+            cp -v "$GITHUB_WORKSPACE/$FEEDS_CONF" feeds.conf.default || {
+              echo "::error::Failed to copy feeds configuration"
+              exit 1
+            }
+          else
+            echo "::warning::Using default feeds.conf as custom file not found"
+          fi
+        
+          # Execute diy-part1.sh
+          if [ -x "$GITHUB_WORKSPACE/$DIY_P1_SH" ]; then
+            echo "::group::Running custom diy-part1.sh"
+            "$GITHUB_WORKSPACE/$DIY_P1_SH"
+            echo "::endgroup::"
+          else
+            echo "::error::DIY script $DIY_P1_SH not found or not executable"
             exit 1
-          }
+          fi
+
 
       - name: Update Feeds
         working-directory: ${{ env.BUILD_DIR }}
