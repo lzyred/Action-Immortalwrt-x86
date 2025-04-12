@@ -2,125 +2,181 @@ name: OpenWrt Automated Builder
 
 on:
   schedule:
-    # Run daily at 00:00 UTC (08:00 Beijing Time)
-    - cron: '0 0 13 * *'
-  workflow_dispatch: {}  # Retain manual trigger capability
+    # Run 16 at 20:00 UTC (04:00 Beijing Time)
+    - cron: '0 20 16 * *'
+  workflow_dispatch:
+    inputs:
+      enable_ssh:
+        description: 'Enable SSH debugging'
+        type: boolean
+        required: true
+        default: false
 
-env:  # Centralized environment variables
+env:
+  # Repository Configuration
   REPO_OWNER: immortalwrt
   REPO_NAME: immortalwrt
   REPO_BRANCH: openwrt-24.10
-  BUILD_DIR: /workdir/openwrt
-  ARTIFACT_NAME: OpenWrt_Firmware
-  CCACHE_DIR: /workdir/ccache
+  
+  # Build Configuration
+  BUILD_ROOT: /workdir
+  BUILD_DIR: ${{ env.BUILD_ROOT }}/openwrt
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE: .config
+  DIY_P1_SH: diy-part1.sh
+  DIY_P2_SH: diy-part2.sh
+  
+  # Artifact Management
+  UPLOAD_BIN_DIR: false
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
   KEEP_RELEASES: 3
   TIMEZONE: Asia/Shanghai
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: production
 
     steps:
-      # ----------------------------------
+      # ======================
       # Environment Setup
-      # ----------------------------------
+      # ======================
       - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          path: src
+        uses: actions/checkout@main
 
       - name: Initialize Build Environment
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          sudo bash -c 'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)'
           sudo timedatectl set-timezone $TIMEZONE
           sudo mkdir -p /mnt/workdir
           sudo chown -R $USER:$GROUPS /mnt/workdir
-          sudo ln -sf /mnt/workdir /workdir
+          [ ! -L /workdir ] && sudo ln -s /mnt/workdir /workdir
 
-      # ----------------------------------
+      # ======================
       # Source Code Management
-      # ----------------------------------
-      - name: Clone Repository (Shallow)
-        working-directory: /workdir
+      # ======================
+      - name: Clone Source Code (Shallow)
+        working-directory: ${{ env.BUILD_ROOT }}
         run: |
           git clone --depth=1 --branch $REPO_BRANCH \
           https://github.com/$REPO_OWNER/$REPO_NAME.git openwrt || {
-            echo "::error::Failed to clone repository"
+            echo "::error::Repository clone failed"
             exit 1
           }
+          ln -sf $BUILD_DIR $GITHUB_WORKSPACE/openwrt
 
-      # ----------------------------------
+      # ======================
       # Dependency Management
-      # ----------------------------------
-      - name: Restore Build Cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            $BUILD_DIR/dl
-            $CCACHE_DIR
-          key: ${{ runner.os }}-${{ hashFiles('src/feeds.conf.default') }}-${{ hashFiles('src/.config') }}
+      # ======================
 
-      - name: Setup Feeds
-        working-directory: $BUILD_DIR
+      - name: Load Custom Feeds
+        working-directory: ${{ env.BUILD_DIR }}
         run: |
-          [ -e ../src/feeds.conf.default ] && cp ../src/feeds.conf.default .
-          ./scripts/feeds update -a || {
-            echo "::error::Feed update failed"
+          [ -e $GITHUB_WORKSPACE/$FEEDS_CONF ] && \
+          cp $GITHUB_WORKSPACE/$FEEDS_CONF feeds.conf.default || {
+            echo "::warning::Custom feeds.conf.default not found, using default"
+          }
+          
+          chmod +x $GITHUB_WORKSPACE/$DIY_P1_SH && \
+          $GITHUB_WORKSPACE/$DIY_P1_SH || {
+            echo "::error::Failed to execute diy-part1.sh"
             exit 1
           }
-          ./scripts/feeds install -a
 
-      # ----------------------------------
+      - name: Update Feeds
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ./scripts/feeds update -a || {
+          echo "::error::Feeds update failed"
+          exit 1
+        }
+
+      - name: Install Feeds
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ./scripts/feeds install -a || {
+          echo "::error::Feeds installation failed"
+          exit 1
+        }
+
+      # ======================
       # Build Configuration
-      # ----------------------------------
+      # ======================
       - name: Apply Custom Configuration
-        working-directory: $BUILD_DIR
+        working-directory: ${{ env.BUILD_DIR }}
         run: |
-          [ -e ../src/files ] && cp -r ../src/files .
-          [ -e ../src/.config ] && cp ../src/.config .
-          chmod +x ../src/diy-part2.sh && ../src/diy-part2.sh
+          [ -e $GITHUB_WORKSPACE/files ] && cp -r $GITHUB_WORKSPACE/files .
+          [ -e $GITHUB_WORKSPACE/$CONFIG_FILE ] && cp $GITHUB_WORKSPACE/$CONFIG_FILE .config
+          
+          chmod +x $GITHUB_WORKSPACE/$DIY_P2_SH && \
+          $GITHUB_WORKSPACE/$DIY_P2_SH || {
+            echo "::error::Failed to execute diy-part2.sh"
+            exit 1
+          }
 
-      # ----------------------------------
-      # Compilation Process
-      # ----------------------------------
-      - name: Compile Firmware
-        working-directory: $BUILD_DIR
+      # ======================
+      # Build Process
+      # ======================
+      - name: Download Packages
+        working-directory: ${{ env.BUILD_DIR }}
         run: |
-          make -j$(($(nproc) + 1)) || {
+          make defconfig
+          make download -j$(nproc) || {
+            echo "::error::Package download failed"
+            exit 1
+          }
+          # Clean invalid downloads
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: Compile Firmware
+        working-directory: ${{ env.BUILD_DIR }}
+        run: |
+          echo "Using $(($(nproc) + 1)) parallel jobs"
+          make -j$(($(nproc) + 1)) || make -j1 || {
             echo "::error::Compilation failed"
             exit 1
           }
+          
+          # Generate semantic version (vYYYY.MM.DD)
           echo "BUILD_VERSION=$(date +'v%Y.%-m.%-d')" >> $GITHUB_ENV
+          echo "BUILD_TIMESTAMP=$(date +'%Y%m%d%H%M')" >> $GITHUB_ENV
 
-      # ----------------------------------
-      # Artifact Management
-      # ----------------------------------
-      - name: Package Artifacts
-        working-directory: $BUILD_DIR/bin/targets
+      # ======================
+      # Artifact Handling
+      # ======================
+      - name: Prepare Artifacts
+        if: env.UPLOAD_FIRMWARE == 'true'
+        working-directory: ${{ env.BUILD_DIR }}/bin/targets
         run: |
-          find . -name "*.img.gz" -o -name "*.bin" -o -name "sha256sums" | xargs -I{} cp {} ../artifacts/
-          echo "ARTIFACT_PATH=$(realpath ../artifacts)" >> $GITHUB_ENV
+          # Clean intermediate files
+          find . -name packages -type d -exec rm -rf {} +
+          find . -name "*rootfs*" -exec rm -f {} +
+          
+          # Prepare final artifacts
+          mkdir -p final_artifacts
+          find . -name "*.img" -o -name "*.bin" -o -name "sha256sums" | xargs -I{} cp {} final_artifacts/
+          echo "ARTIFACT_PATH=$(realpath final_artifacts)" >> $GITHUB_ENV
 
-      - name: Upload Artifacts
+      - name: Upload Firmware Artifacts
         uses: actions/upload-artifact@v4
-        with: 
-          name: ${{ env.ARTIFACT_NAME }}_${{ env.BUILD_VERSION }}
+        if: env.UPLOAD_FIRMWARE == 'true' && success()
+        with:
+          name: ${{ env.BUILD_VERSION }}_Firmware
           path: ${{ env.ARTIFACT_PATH }}
 
-      # ----------------------------------
+      # ======================
       # Release Management
-      # ----------------------------------
-      - name: Create GitHub Release
+      # ======================
+      - name: Create Versioned Release
+        if: env.UPLOAD_RELEASE == 'true' && success()
         uses: softprops/action-gh-release@v2
-        if: success()
-        with:
-          tag_name: ${{ env.BUILD_VERSION }}
-          files: ${{ env.ARTIFACT_PATH }}/*
-          body: "Automated OpenWrt build - ${{ env.BUILD_VERSION }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.BUILD_VERSION }}
+          name: "${{ env.BUILD_VERSION }} Build"
+          body: "Automated OpenWrt build - ${{ env.BUILD_VERSION }}"
+          files: ${{ env.ARTIFACT_PATH }}/*
 
       - name: Clean Old Releases
         if: success()
@@ -130,3 +186,10 @@ jobs:
           delete_tag_pattern: "v*"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ======================
+      # Debugging Tools
+      # ======================
+      - name: Start SSH Session (Debug)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_ssh == 'true' }}
+        uses: mxschmitt/action-tmate@v3
