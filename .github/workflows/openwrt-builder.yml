@@ -45,7 +45,7 @@ jobs:
       REPO_OWNER: ${{ github.event.inputs.repository_owner || 'immortalwrt' }}
       REPO_NAME: ${{ github.event.inputs.repository_name || 'immortalwrt' }}
       REPO_BRANCH: ${{ github.event.inputs.repository_branch || 'openwrt-24.10' }}
-      REPO_URL: https://github.com/${{ env.REPO_OWNER }}/${{ env.REPO_NAME }}
+      REPO_URL: "https://github.com/${{ github.event.inputs.repository_owner || github.event.client_payload.repository_owner }}/${{ github.event.inputs.repository_name || github.event.client_payload.repository_name }}"
       FEEDS_CONF: feeds.conf.default
       CONFIG_FILE: .config
       DIY_P1_SH: diy-part1.sh
