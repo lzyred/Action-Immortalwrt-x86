@@ -14,8 +14,8 @@ name: OpenWrt Builder
 
 on:
   schedule:
-    # Run monthly on the 16th at 20:00 UTC (04:00 Beijing Time)
-    - cron: '0 20 16 * *'
+    # Run monthly on the 12th at 20:00 UTC (04:00 Beijing Time)
+    - cron: '0 20 12 * *'
   workflow_dispatch:
     inputs:
       repository_owner:
