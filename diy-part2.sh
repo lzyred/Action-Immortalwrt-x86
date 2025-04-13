@@ -42,10 +42,10 @@ config device
 config interface 'lan'
 	option device 'eth0'
 	option proto 'static'
-	option ipaddr 192.168.2.1'
+	option ipaddr '192.168.2.1'
 	option netmask '255.255.255.0'
 	option gateway '192.168.2.1'
-	list dns 192.168.2.1'
+	list dns '192.168.2.1'
 	option delegate '0'
 
 config interface 'vpn0'
@@ -97,7 +97,7 @@ EOF
  # 写入 firewall 配置文件
 cat <<'EOF' > ./files/etc/config/firewall
 config defaults                                                                                                                                                                                                                      
-        option input 'ACCEPT'                                                                                                                                                                                                        
+        option input 'REJECT'                                                                                                                                                                                                        
         option output 'ACCEPT'                                                                                                                                                                                                       
         option forward 'ACCEPT'                                                                                                                                                                                                      
         option flow_offloading '1'                                                                                                                                                                                                                                                                                                                                                                                   
@@ -105,7 +105,7 @@ config defaults
 config zone                                                                                                                                                                                                                          
         option name 'lan'                                                                                                                                                                                                            
         list network 'lan'                                                                                                                                                                                                           
-        option input 'ACCEPT'                                                                                                                                                                                                        
+	option input 'ACCEPT'  
         option output 'ACCEPT'                                                                                                                                                                                                       
         option forward 'ACCEPT'                                                                                                                                                                                                      
         option masq '1'                                                                                                                                                                                                                                                                                                                                                                   
