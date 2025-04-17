@@ -122,79 +122,75 @@ jobs:
         id: compile
         run: |
           cd openwrt
-          echo -e "$(nproc) thread compile"
+          echo -e "$THREADS threads will be used for compiling"
           make -j$(nproc) || make -j1 || make -j1 V=s
           echo "status=success" >> $GITHUB_OUTPUT
           grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
           [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-          echo "FILE_DATE=$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
-          echo "FILE_DATE1=$(date +"%Y%m%d.%H%M")" >> $GITHUB_ENV
-
-            
+          echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+  
       - name: Check space usage
         if: (!cancelled())
         run: df -hT
-
+  
       - name: Upload bin directory
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
         with:
           name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
           path: openwrt/bin
-          
-      - name: Organize files
+  
+      - name: Organize firmware files
         id: organize
         if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
         run: |
           cd openwrt/bin/targets/*/*
-          rm -rf packages *rootfs.tar.gz *rootfs.img.gz *combined.img.gz *.bin *.config *.buildinfo *.json sha256sums *.manifest *.rootfs.img
-          for f in *; do 
-            mv "$f" "$FILE_DATE1-$f"
-          done     
-          find . -type f \( -name "*.img" -o -name "*.rootfs.img" \) -exec gzip {} \;         
-          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-          echo "FILE_DATE1=$(date +"%Y%m%d")" >> $GITHUB_ENV  
+          rm -rf packages
+          FIRMWARE_DIR=$PWD
+          if [ -z "$(ls -A $FIRMWARE_DIR)" ]; then
+            echo "Error: Firmware directory is empty!"
+            exit 1
+          fi
+          echo "FIRMWARE=$FIRMWARE_DIR" >> $GITHUB_ENV
           echo "status=success" >> $GITHUB_OUTPUT
-      - name: Upload firmware directory
-        uses: actions/upload-artifact@main
+  
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
         if: steps.organize.outputs.status == 'success' && !cancelled()
         with:
-          name: ${{ env.FILE_DATE }}_${{ env.OPENWRT_NAME }}_${{ env.OPENWRT_NAME1 }}
+          name: OpenWrt_firmware_${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
           path: ${{ env.FIRMWARE }}
-
+  
       - name: Generate release tag
         id: tag
         if: env.UPLOAD_RELEASE == 'true' && !cancelled()
         run: |
-          echo "release_tag=${{ env.FILE_DATE1 }}" >> $GITHUB_OUTPUT
-          touch release.txt
-          echo "📥 固件下载" >> release.txt
+          release_tag=$(date +"%Y.%m.%d-%H%M")
+          echo "release_tag=$release_tag" >> $GITHUB_OUTPUT
+          echo "🔗 [GoFile](${{ steps.gofile.outputs.url }})" > release.txt || true
           echo "status=success" >> $GITHUB_OUTPUT
-
-      - name: Upload firmware to release
-        uses: softprops/action-gh-release@master
-        if: steps.tag.outputs.status == 'success' && !cancelled()
-        env:
-          GITHUB_TOKEN: ${{ secrets.ACTION }}
+  
+      - name: Upload firmware to GitHub Release
+        if: steps.organize.outputs.status == 'success' && steps.tag.outputs.status == 'success' && !cancelled()
+        uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           body_path: release.txt
           files: ${{ env.FIRMWARE }}/*
-
-      - name: Delete workflow runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  
+      - name: Clean up old workflow runs
         uses: Mattraks/delete-workflow-runs@main
         with:
           retain_days: 0
           keep_minimum_runs: 2
-          repository: ${{ github.repository }}
-          token: ${{ secrets.ACTION }}  
-
-      - name: Remove old Releases
+  
+      - name: Clean up old releases
         uses: dev-drprasad/delete-older-releases@master
         if: env.UPLOAD_RELEASE == 'true' && !cancelled()
         with:
-          keep_latest: 3
+          keep_latest: 2
           delete_tags: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  
-
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
